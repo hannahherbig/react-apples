@@ -1,6 +1,9 @@
 import React from "react";
 import logo from "./logo.svg";
 import "./App.css";
+import { Card, Game, Player } from "@shared/types";
+
+const ws = new WebSocket("ws://127.0.0.1:8080");
 
 function App() {
   return (

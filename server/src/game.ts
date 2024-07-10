@@ -1,6 +1,8 @@
-import { NOUNS, ADJECTIVES } from "./cards";
-import { Card, Player as TPlayer, Game as TGame } from "./types";
+import { NOUNS, ADJECTIVES } from "@shared/cards";
+import { Card, Player as TPlayer, Game as TGame } from "@shared/types";
 import { find, findIndex, shuffle, every } from "lodash";
+import { v4 as uuid } from "uuid";
+import WebSocket from "ws";
 
 export class Game {
   state: "Waiting" | "Playing" | "Judging";
@@ -16,6 +18,7 @@ export class Game {
   };
   adjective?: Card;
   judge?: Player;
+  cards?: Card[];
 
   constructor() {
     this.state = "Waiting";
@@ -36,6 +39,7 @@ export class Game {
         noun: this.last.noun,
         winner: this.last.winner.toJSON(),
       },
+      cards: this.cards,
     };
   }
 
@@ -44,6 +48,7 @@ export class Game {
     this.players.forEach((p) => {
       delete p.played;
     });
+    delete this.cards;
     this.state = "Playing";
     if (this.adjectives.length === 0) {
       this.adjectives = shuffle(ADJECTIVES.slice());
@@ -107,16 +112,17 @@ export class Game {
 
   play() {
     const cards = shuffle(
-      this.players.filter((p) => !p.judge).map((p) => p.played),
+      this.players.filter((p) => !p.judge).map((p) => p.played)
     );
 
     if (every(cards)) {
       this.state = "Judging";
+      this.cards = cards as Card[];
     }
   }
 
-  createPlayer(id: string) {
-    const player = new Player(this, id);
+  createPlayer(ws: WebSocket) {
+    const player = new Player(this, ws);
 
     player.draw(7);
 
@@ -143,14 +149,15 @@ export class Game {
     if (this.players.length < 3) {
       // not enough players
       this.stop();
+    } else {
+      this.play();
     }
-
-    this.play();
   }
 }
 
 export class Player {
   game: Game;
+  ws: WebSocket;
   id: string;
   name: string;
   hand: Card[];
@@ -158,10 +165,10 @@ export class Player {
   judge: boolean;
   played?: Card;
 
-  constructor(game: Game, id: string) {
+  constructor(game: Game, ws: WebSocket) {
+    this.id = this.name = uuid();
     this.game = game;
-    this.id = id;
-    this.name = id;
+    this.ws = ws;
     this.hand = [];
     this.score = 0;
     this.judge = false;
@@ -188,7 +195,7 @@ export class Player {
       this.played = card;
       this.hand.splice(
         findIndex(this.hand, (c) => card.name === c.name),
-        1,
+        1
       );
       this.draw();
       this.game.play();

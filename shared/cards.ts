@@ -1,4 +1,4 @@
-import CARDS from "./all_cards.json";
+import CARDS from "./all_cards";
 import { Card } from "./types";
 
 function toCardList(arr: string[][]): Card[] {

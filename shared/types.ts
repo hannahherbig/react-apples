@@ -21,4 +21,5 @@ export type Game = {
     noun: Card;
     winner: Player;
   };
+  cards?: Card[];
 };
