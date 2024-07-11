@@ -1,5 +1,10 @@
 import { NOUNS, ADJECTIVES } from "@shared/cards";
-import { Card, Player as TPlayer, Game as TGame } from "@shared/types";
+import {
+  Card,
+  Player as TPlayer,
+  Game as TGame,
+  GameState,
+} from "@shared/types";
 import { find, findIndex, shuffle, every } from "lodash";
 import { v4 as uuid } from "uuid";
 import WebSocket from "ws";
@@ -43,6 +48,12 @@ export class Game {
     };
   }
 
+  send() {
+    this.players.forEach((player) => {
+      player.send();
+    });
+  }
+
   nextRound() {
     this.nextJudge();
     this.players.forEach((p) => {
@@ -54,6 +65,8 @@ export class Game {
       this.adjectives = shuffle(ADJECTIVES.slice());
     }
     this.adjective = this.adjectives.shift()!;
+
+    this.send();
   }
 
   nextJudge() {
@@ -73,6 +86,8 @@ export class Game {
     }
 
     this.play();
+
+    this.send();
   }
 
   stop() {
@@ -83,6 +98,8 @@ export class Game {
     delete this.adjective;
     delete this.judge;
     this.state = "Waiting";
+
+    this.send();
   }
 
   pick(card: Card) {
@@ -100,6 +117,8 @@ export class Game {
       }
     });
     this.nextRound();
+
+    this.send();
   }
 
   draw() {
@@ -119,6 +138,8 @@ export class Game {
       this.state = "Judging";
       this.cards = cards as Card[];
     }
+
+    this.send();
   }
 
   createPlayer(ws: WebSocket) {
@@ -131,6 +152,8 @@ export class Game {
     if (this.players.length === 3) {
       this.nextRound();
     }
+
+    this.send();
 
     return player;
   }
@@ -152,12 +175,15 @@ export class Game {
     } else {
       this.play();
     }
+
+    this.send();
   }
 }
 
 export class Player {
   game: Game;
   ws: WebSocket;
+  lastMessage: string;
   id: string;
   name: string;
   hand: Card[];
@@ -167,6 +193,7 @@ export class Player {
 
   constructor(game: Game, ws: WebSocket) {
     this.id = this.name = uuid();
+    this.lastMessage = "";
     this.game = game;
     this.ws = ws;
     this.hand = [];
@@ -184,10 +211,26 @@ export class Player {
     };
   }
 
+  send() {
+    if (this.ws.readyState === WebSocket.OPEN) {
+      const state: GameState = {
+        game: this.game.toJSON(),
+        hand: this.hand,
+        id: this.id,
+      };
+      const message = JSON.stringify(state);
+      if (message !== this.lastMessage) {
+        this.ws.send((this.lastMessage = message));
+      }
+    }
+  }
+
   draw(n = 1) {
     for (let i = 0; i < n; ++i) {
       this.hand.push(this.game.draw());
     }
+
+    this.game.send();
   }
 
   play(card: Card) {
@@ -200,9 +243,13 @@ export class Player {
       this.draw();
       this.game.play();
     }
+
+    this.game.send();
   }
 
   quit() {
     this.game.removePlayer(this);
+
+    this.game.send();
   }
 }

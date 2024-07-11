@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import { Game, Player } from "./game";
+import { ClientUpdate } from "@shared/types";
 
 const wss = new WebSocketServer({
   port: 8080,
@@ -18,9 +19,18 @@ wss.on("connection", (ws) => {
 
   ws.on("message", (data) => {
     console.log("received: %s", data);
+    const update: ClientUpdate = JSON.parse(data.toString());
+    if (update.name) {
+      player.name = update.name;
+    }
+    if (update.pick && game.judge === player && game.state === "Judging") {
+      game.pick(update.pick);
+    }
+    if (update.play && game.state === "Playing") {
+      player.play(update.play);
+    }
+    game.send();
   });
-
-  sendGame();
 
   ws.on("close", () => {
     player.quit();
