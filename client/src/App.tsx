@@ -1,17 +1,16 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import React, { useEffect, useState } from "react";
 import useWebSocket from "react-use-websocket";
-import { Card, ClientUpdate, Game, GameState, Player } from "@shared/types";
-import {
-  Alert,
-  Badge,
-  Col,
-  Container,
-  Form,
-  Navbar,
-  Row,
-  Table,
-} from "react-bootstrap";
+import { Card, ClientUpdate, GameState } from "@shared/types";
+import Alert from "react-bootstrap/Alert";
+import Badge from "react-bootstrap/Badge";
+import Col from "react-bootstrap/Col";
+import Container from "react-bootstrap/Container";
+import Form from "react-bootstrap/Form";
+import Navbar from "react-bootstrap/Navbar";
+import Row from "react-bootstrap/Row";
+import Stack from "react-bootstrap/Stack";
+import Table from "react-bootstrap/Table";
 
 function CardList({
   cards,
@@ -91,86 +90,76 @@ export default function App() {
 
       {game && (
         <Container fluid>
-          <Row fluid>
-            <Col fluid>
-              <Container fluid>
+          <Row>
+            <Col>
+              <Stack>
                 {game.adjective && (
-                  <Row fluid>
-                    <Col fluid>
-                      <Alert variant="success">
-                        <strong>{game.adjective.name}</strong> -{" "}
-                        {game.adjective.definition}
-                      </Alert>
-                    </Col>
-                  </Row>
+                  <Alert variant="success" className="m-2">
+                    <strong>{game.adjective.name}</strong> -{" "}
+                    {game.adjective.definition}
+                  </Alert>
                 )}
                 {game.cards && (
-                  <Row fluid>
-                    <Col fluid>
-                      <h4>Cards to judge</h4>
-                      <CardList
-                        cards={game.cards}
-                        canClick={judge}
-                        onClick={handleJudge}
-                      />
-                    </Col>
-                  </Row>
+                  <div className="m-2">
+                    <h4>Cards to judge</h4>
+                    <CardList
+                      cards={game.cards}
+                      canClick={judge}
+                      onClick={handleJudge}
+                    />
+                  </div>
                 )}
-                <Col fluid>
+                <div className="m-2">
                   <h4>Your hand</h4>
                   <CardList
                     cards={state.hand}
                     canClick={canplay}
                     onClick={handlePlay}
                   />
-                </Col>
-              </Container>
+                </div>
+              </Stack>
             </Col>
-            <Col fluid>
-              <Container fluid>
-                <Row fluid>
-                  <Col fluid>
-                    <ul>
+            <Col>
+              <Stack>
+                <div className="m-2">
+                  <Form.Control
+                    placeholder="Name"
+                    value={me?.name}
+                    onChange={(e) => {
+                      handleName(e.target.value);
+                    }}
+                  />
+                </div>
+                <div className="m-2">
+                  <ul>
+                    <li>
+                      <strong>State:</strong> {game.state}
+                    </li>
+                    {last && (
                       <li>
-                        <strong>State:</strong> {game.state}
+                        <strong>Last round:</strong>
+                        <ul>
+                          <li>
+                            <strong>Judge:</strong> - {last.judge.name}
+                          </li>
+                          <li>
+                            <strong>Adjective:</strong> {last.adjective.name}{" "}
+                            &mdash;
+                            {last.adjective.definition}
+                          </li>
+                          <li>
+                            <strong>Winner:</strong> {last.winner.name}
+                          </li>
+                          <li>
+                            <strong>Noun:</strong> {last.noun.name} &mdash;
+                            {last.noun.definition}
+                          </li>
+                        </ul>
                       </li>
-                      {last && (
-                        <li>
-                          <strong>Last round:</strong>
-                          <ul>
-                            <li>
-                              <strong>Judge:</strong> - {last.judge.name}
-                            </li>
-                            <li>
-                              <strong>Adjective:</strong> {last.adjective.name}{" "}
-                              &mdash;
-                              {last.adjective.definition}
-                            </li>
-                            <li>
-                              <strong>Winner:</strong> {last.winner.name}
-                            </li>
-                            <li>
-                              <strong>Noun:</strong> {last.noun.name} &mdash;
-                              {last.noun.definition}
-                            </li>
-                          </ul>
-                        </li>
-                      )}
-                    </ul>
-                  </Col>
-                </Row>
-                <Row fluid>
-                  <Col>
-                    <Form.Control
-                      placeholder="Name"
-                      value={me?.name}
-                      onChange={(e) => {
-                        handleName(e.target.value);
-                      }}
-                    />
-                  </Col>
-                </Row>
-                <Row fluid>
+                    )}
+                  </ul>
+                </div>
+                <div className="m-2">
                   <Table bordered>
                     <thead>
                       <tr>
@@ -184,7 +173,9 @@ export default function App() {
                           <td>
                             {player.name}{" "}
                             {me === player && <Badge bg="primary">You</Badge>}{" "}
-                            {player.judge && <Badge bg="secondary">Judge</Badge>}{" "}
+                            {player.judge && (
+                              <Badge bg="secondary">Judge</Badge>
+                            )}{" "}
                             {player.played && (
                               <Badge bg="success">Played</Badge>
                             )}
@@ -194,8 +185,8 @@ export default function App() {
                       ))}
                     </tbody>
                   </Table>
-                </Row>
-              </Container>
+                </div>
+              </Stack>
             </Col>
           </Row>
         </Container>

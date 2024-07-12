@@ -5,7 +5,7 @@ import {
   Game as TGame,
   GameState,
 } from "@shared/types";
-import { find, findIndex, shuffle, every } from "lodash";
+import { find, findIndex, shuffle, every, sample } from "lodash";
 import { v4 as uuid } from "uuid";
 import WebSocket from "ws";
 
@@ -192,7 +192,8 @@ export class Player {
   played?: Card;
 
   constructor(game: Game, ws: WebSocket) {
-    this.id = this.name = uuid();
+    this.name = sample(NOUNS)!.name;
+    this.id = uuid();
     this.lastMessage = "";
     this.game = game;
     this.ws = ws;

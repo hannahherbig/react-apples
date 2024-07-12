@@ -20,7 +20,7 @@ wss.on("connection", (ws) => {
   ws.on("message", (data) => {
     console.log("received: %s", data);
     const update: ClientUpdate = JSON.parse(data.toString());
-    if (update.name) {
+    if (update.name != null) {
       player.name = update.name;
     }
     if (update.pick && game.judge === player && game.state === "Judging") {
