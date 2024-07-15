@@ -1,10 +1,14 @@
 import { WebSocketServer } from "ws";
-import { Game, Player } from "./game";
+import express from "express";
+import http from "http";
+import path from "path";
+import { Game } from "./game";
 import { ClientUpdate } from "@shared/types";
 
-const wss = new WebSocketServer({
-  port: 8080,
-});
+const app = express();
+app.use(express.static(path.join(__dirname, "../../client/build")));
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
 const game = new Game();
 
@@ -12,10 +16,6 @@ wss.on("connection", (ws) => {
   ws.on("error", console.error);
 
   const player = game.createPlayer(ws);
-
-  function sendGame() {
-    ws.send(JSON.stringify(game));
-  }
 
   ws.on("message", (data) => {
     console.log("received: %s", data);
@@ -44,3 +44,8 @@ setInterval(() => {
     console.log((last = msg));
   }
 }, 100);
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});

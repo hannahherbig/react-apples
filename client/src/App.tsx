@@ -42,20 +42,25 @@ function CardList({
 }
 
 export default function App() {
-  const [socketUrl, setSocketUrl] = useState("ws://127.0.0.1:8080");
   const [state, setState] = useState<GameState>();
 
-  const { sendMessage, lastMessage, readyState } = useWebSocket(socketUrl);
+  const { sendJsonMessage, lastJsonMessage } = useWebSocket(
+    process.env.NODE_ENV !== "production"
+      ? "ws://127.0.0.1:8080"
+      : (document.location.protocol === "https:" ? "wss" : "ws") +
+          "://" +
+          document.location.host,
+  );
 
   function send(data: ClientUpdate) {
-    sendMessage(JSON.stringify(data));
+    sendJsonMessage(data);
   }
 
   useEffect(() => {
-    if (lastMessage !== null) {
-      setState(JSON.parse(lastMessage.data));
+    if (lastJsonMessage !== null) {
+      setState(lastJsonMessage as GameState);
     }
-  }, [lastMessage]);
+  }, [lastJsonMessage]);
 
   const game = state?.game;
   const me = game?.players.find((p) => p.id === state?.id);
