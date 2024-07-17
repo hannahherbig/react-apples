@@ -140,6 +140,9 @@ export default function App() {
                     <li>
                       <strong>State:</strong> {game.state}
                     </li>
+                    <li>
+                      <strong>Elapsed:</strong> {game.elapsed}
+                    </li>
                     {last && (
                       <li>
                         <strong>Last round:</strong>
@@ -149,8 +152,7 @@ export default function App() {
                           </li>
                           <li>
                             <strong>Adjective:</strong> {last.adjective.name}{" "}
-                            &mdash;
-                            {last.adjective.definition}
+                            &mdash; {last.adjective.definition}
                           </li>
                           <li>
                             <strong>Winner:</strong> {last.winner.name}

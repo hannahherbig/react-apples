@@ -5,9 +5,11 @@ import {
   Game as TGame,
   GameState,
 } from "@shared/types";
-import { find, findIndex, shuffle, every, sample } from "lodash";
+import { find, findIndex, shuffle, sample, sortBy } from "lodash";
 import { v4 as uuid } from "uuid";
 import WebSocket from "ws";
+
+const INTERVAL = 180000; // 3 mins
 
 export class Game {
   state: "Waiting" | "Playing" | "Judging";
@@ -23,7 +25,7 @@ export class Game {
   };
   adjective?: Card;
   judge?: Player;
-  cards?: Card[];
+  start: number;
 
   constructor() {
     this.state = "Waiting";
@@ -31,6 +33,7 @@ export class Game {
     this.nouns = [];
     this.adjectives = [];
     this.discardedNouns = NOUNS.slice();
+    this.start = Date.now();
   }
 
   toJSON(): TGame {
@@ -44,7 +47,8 @@ export class Game {
         noun: this.last.noun,
         winner: this.last.winner.toJSON(),
       },
-      cards: this.cards,
+      cards: this.state === "Judging" ? this.playedCards() : undefined,
+      elapsed: Math.floor((Date.now() - this.start) / 1000),
     };
   }
 
@@ -55,16 +59,17 @@ export class Game {
   }
 
   nextRound() {
-    this.nextJudge();
-    this.players.forEach((p) => {
-      delete p.played;
+    this.players.forEach((player) => {
+      delete player.played;
+      player.draw(7 - player.hand.length);
     });
-    delete this.cards;
     this.state = "Playing";
+    this.start = Date.now();
     if (this.adjectives.length === 0) {
       this.adjectives = shuffle(ADJECTIVES.slice());
     }
     this.adjective = this.adjectives.shift()!;
+    this.nextJudge();
 
     this.send();
   }
@@ -76,10 +81,16 @@ export class Game {
       if (this.judge != null) {
         i = (findIndex(this.players, "judge") + 1) % this.players.length;
         this.judge.judge = false;
+        if (this.judge.played != null) {
+          --this.judge.score; // penalty for not judging
+        }
       }
 
       this.judge = this.players[i];
       this.judge.judge = true;
+      if (this.judge.played != null) {
+        this.judge.hand.unshift(this.judge.played);
+      }
       delete this.judge.played;
     } else {
       delete this.judge;
@@ -98,6 +109,7 @@ export class Game {
     delete this.adjective;
     delete this.judge;
     this.state = "Waiting";
+    this.start = Date.now();
 
     this.send();
   }
@@ -129,16 +141,49 @@ export class Game {
     return this.nouns.shift()!;
   }
 
+  playedCards() {
+    const cards: Card[] = [];
+    this.players.forEach((player) => {
+      if (!player.judge && player.played != null) {
+        cards.push(player.played);
+      }
+    });
+    return sortBy(cards, "name");
+  }
+
   play() {
-    const cards = shuffle(
-      this.players.filter((p) => !p.judge).map((p) => p.played)
-    );
+    const elapsed = Date.now() - this.start;
+    if (this.state === "Playing") {
+      if (
+        this.playedCards().length >= 2 &&
+        (this.players.every((p) => p.judge || p.played != null) ||
+          elapsed > INTERVAL)
+      ) {
+        this.state = "Judging";
+        this.start = Date.now();
 
-    if (every(cards)) {
-      this.state = "Judging";
-      this.cards = cards as Card[];
+        this.send();
+      }
     }
+  }
 
+  update() {
+    const elapsed = Date.now() - this.start;
+    switch (this.state) {
+      case "Playing":
+        this.play();
+        break;
+      case "Judging":
+        if (elapsed > INTERVAL) {
+          this.nextJudge();
+          this.state = "Playing";
+          this.start = Date.now();
+          this.play();
+        }
+        break;
+      case "Waiting":
+        break;
+    }
     this.send();
   }
 
@@ -228,24 +273,22 @@ export class Player {
 
   draw(n = 1) {
     for (let i = 0; i < n; ++i) {
-      this.hand.push(this.game.draw());
+      this.hand.unshift(this.game.draw());
     }
 
     this.game.send();
   }
 
   play(card: Card) {
-    if (!this.judge && this.played == null && this.game.state === "Playing") {
+    if (this.game.state === "Playing" && !this.judge && this.played == null) {
       this.played = card;
       this.hand.splice(
         findIndex(this.hand, (c) => card.name === c.name),
         1
       );
-      this.draw();
       this.game.play();
+      this.game.send();
     }
-
-    this.game.send();
   }
 
   quit() {

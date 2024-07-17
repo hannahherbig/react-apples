@@ -39,6 +39,7 @@ wss.on("connection", (ws) => {
 
 let last = "";
 setInterval(() => {
+  game.update();
   const msg = JSON.stringify(game);
   if (last !== msg) {
     console.log((last = msg));

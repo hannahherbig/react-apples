@@ -22,6 +22,7 @@ export type Game = {
     winner: Player;
   };
   cards?: Card[];
+  elapsed: number;
 };
 
 export type GameState = {
