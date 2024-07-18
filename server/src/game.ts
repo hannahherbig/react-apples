@@ -4,7 +4,7 @@ import { find, findIndex, shuffle, sample, sortBy } from "lodash";
 import { Server, Socket } from "socket.io";
 import { v4 as uuid } from "uuid";
 
-const INTERVAL = 30000; // 3 mins
+const INTERVAL = 180000; // 3 mins
 
 export class Game {
   state: "Waiting" | "Playing" | "Judging";

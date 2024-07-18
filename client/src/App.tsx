@@ -1,6 +1,6 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import React, { useEffect, useState, Fragment } from "react";
-import { Card, Game, Player } from "@shared/types";
+import { Card, Game } from "@shared/types";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
 import Col from "react-bootstrap/Col";
