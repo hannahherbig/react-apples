@@ -1,38 +1,47 @@
-import { WebSocketServer } from "ws";
+import { Server } from "socket.io";
 import express from "express";
 import http from "http";
 import path from "path";
 import { Game } from "./game";
-import { ClientUpdate } from "@shared/types";
+import { Card } from "@shared/types";
 
 const app = express();
 app.use(express.static(path.join(__dirname, "../../client/build")));
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const io = new Server(server, {
+  cors: { origin: "http://localhost:3000" },
+});
 
-const game = new Game();
+const game = new Game(io);
 
-wss.on("connection", (ws) => {
-  ws.on("error", console.error);
+io.on("connection", (socket) => {
+  socket.on("error", console.error);
 
-  const player = game.createPlayer(ws);
+  const player = game.createPlayer(socket);
 
-  ws.on("message", (data) => {
-    console.log("received: %s", data);
-    const update: ClientUpdate = JSON.parse(data.toString());
-    if (update.name != null) {
-      player.name = update.name;
+  socket.on("pick", (card: Card) => {
+    if (game.judge === player && game.state === "Judging") {
+      game.pick(card);
     }
-    if (update.pick && game.judge === player && game.state === "Judging") {
-      game.pick(update.pick);
-    }
-    if (update.play && game.state === "Playing") {
-      player.play(update.play);
-    }
-    game.send();
   });
 
-  ws.on("close", () => {
+  socket.on("play", (card: Card) => {
+    if (game.state === "Playing") {
+      player.play(card);
+    }
+  });
+
+  socket.on("name", (name: string) => {
+    if (player.name !== name) {
+      player.name = name;
+      game.send();
+    }
+  });
+
+  socket.emit("me", player.id);
+  game.send();
+
+  socket.on("disconnect", () => {
     player.quit();
   });
 });

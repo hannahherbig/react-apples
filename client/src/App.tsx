@@ -1,7 +1,6 @@
 import "bootstrap/dist/css/bootstrap.min.css";
-import React, { useEffect, useState } from "react";
-import useWebSocket from "react-use-websocket";
-import { Card, ClientUpdate, GameState } from "@shared/types";
+import React, { useEffect, useState, Fragment } from "react";
+import { Card, Game, Player } from "@shared/types";
 import Alert from "react-bootstrap/Alert";
 import Badge from "react-bootstrap/Badge";
 import Col from "react-bootstrap/Col";
@@ -11,6 +10,7 @@ import Navbar from "react-bootstrap/Navbar";
 import Row from "react-bootstrap/Row";
 import Stack from "react-bootstrap/Stack";
 import Table from "react-bootstrap/Table";
+import socket from "./socket";
 
 function CardList({
   cards,
@@ -24,7 +24,7 @@ function CardList({
   return (
     <dl>
       {cards.map((card) => (
-        <>
+        <Fragment key={card.name}>
           <dt>
             {canClick ? (
               <a href="#" onClick={() => onClick(card)}>
@@ -35,49 +35,55 @@ function CardList({
             )}
           </dt>
           <dd>{card.definition}</dd>
-        </>
+        </Fragment>
       ))}
     </dl>
   );
 }
 
 export default function App() {
-  const [state, setState] = useState<GameState>();
-
-  const { sendJsonMessage, lastJsonMessage } = useWebSocket(
-    process.env.NODE_ENV !== "production"
-      ? "ws://127.0.0.1:8080"
-      : (document.location.protocol === "https:" ? "wss" : "ws") +
-          "://" +
-          document.location.host,
-  );
-
-  function send(data: ClientUpdate) {
-    sendJsonMessage(data);
-  }
+  const [game, setGame] = useState<Game>();
+  const [hand, setHand] = useState<Card[]>();
+  const [id, setId] = useState<string>();
+  const [elapsed, setElapsed] = useState<number>();
 
   useEffect(() => {
-    if (lastJsonMessage !== null) {
-      setState(lastJsonMessage as GameState);
+    function handleAny(...args: any[]) {
+      console.log(args);
     }
-  }, [lastJsonMessage]);
 
-  const game = state?.game;
-  const me = game?.players.find((p) => p.id === state?.id);
+    socket.on("game", setGame);
+    socket.on("hand", setHand);
+    socket.on("me", setId);
+    socket.on("elapsed", setElapsed);
+    socket.onAny(handleAny);
+
+    return () => {
+      socket.off("game", setGame);
+      socket.off("hand", setHand);
+      socket.off("me", setId);
+      socket.off("elapsed", setElapsed);
+      socket.offAny(handleAny);
+    };
+  }, []);
+
+  const me = game?.players.find((p) => p.id === id);
   const canplay = !me?.played && !me?.judge && game?.state === "Playing";
   const judge = !!(me?.judge && game?.state === "Judging");
   const last = game?.last;
 
   function handleJudge(card: Card) {
-    send({ pick: card });
+    socket.emit("pick", card);
   }
 
   function handlePlay(card: Card) {
-    send({ play: card });
+    socket.emit("play", card);
   }
 
   function handleName(name: string) {
-    send({ name });
+    if (me?.name !== name) {
+      socket.emit("name", name);
+    }
   }
 
   return (
@@ -114,14 +120,16 @@ export default function App() {
                     />
                   </div>
                 )}
-                <div className="m-2">
-                  <h4>Your hand</h4>
-                  <CardList
-                    cards={state.hand}
-                    canClick={canplay}
-                    onClick={handlePlay}
-                  />
-                </div>
+                {hand && (
+                  <div className="m-2">
+                    <h4>Your hand</h4>
+                    <CardList
+                      cards={hand}
+                      canClick={canplay}
+                      onClick={handlePlay}
+                    />
+                  </div>
+                )}
               </Stack>
             </Col>
             <Col>
@@ -129,7 +137,6 @@ export default function App() {
                 <div className="m-2">
                   <Form.Control
                     placeholder="Name"
-                    value={me?.name}
                     onChange={(e) => {
                       handleName(e.target.value);
                     }}
@@ -140,15 +147,17 @@ export default function App() {
                     <li>
                       <strong>State:</strong> {game.state}
                     </li>
-                    <li>
-                      <strong>Elapsed:</strong> {game.elapsed}
-                    </li>
+                    {elapsed && (
+                      <li>
+                        <strong>Elapsed:</strong> {(elapsed / 1000).toFixed(0)}
+                      </li>
+                    )}
                     {last && (
                       <li>
                         <strong>Last round:</strong>
                         <ul>
                           <li>
-                            <strong>Judge:</strong> - {last.judge.name}
+                            <strong>Judge:</strong> {last.judge.name}
                           </li>
                           <li>
                             <strong>Adjective:</strong> {last.adjective.name}{" "}
@@ -176,10 +185,12 @@ export default function App() {
                     </thead>
                     <tbody>
                       {game.players.map((player) => (
-                        <tr>
+                        <tr key={player.id}>
                           <td>
                             {player.name}{" "}
-                            {me === player && <Badge bg="primary">You</Badge>}{" "}
+                            {me?.id === player.id && (
+                              <Badge bg="primary">You</Badge>
+                            )}{" "}
                             {player.judge && (
                               <Badge bg="secondary">Judge</Badge>
                             )}{" "}

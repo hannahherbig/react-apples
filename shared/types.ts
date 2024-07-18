@@ -22,17 +22,4 @@ export type Game = {
     winner: Player;
   };
   cards?: Card[];
-  elapsed: number;
-};
-
-export type GameState = {
-  game: Game;
-  hand: Card[];
-  id: string;
-};
-
-export type ClientUpdate = {
-  play?: Card;
-  pick?: Card;
-  name?: string;
 };

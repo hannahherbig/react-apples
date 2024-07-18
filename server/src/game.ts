@@ -1,15 +1,10 @@
 import { NOUNS, ADJECTIVES } from "@shared/cards";
-import {
-  Card,
-  Player as TPlayer,
-  Game as TGame,
-  GameState,
-} from "@shared/types";
+import { Card, Player as TPlayer, Game as TGame } from "@shared/types";
 import { find, findIndex, shuffle, sample, sortBy } from "lodash";
+import { Server, Socket } from "socket.io";
 import { v4 as uuid } from "uuid";
-import WebSocket from "ws";
 
-const INTERVAL = 180000; // 3 mins
+const INTERVAL = 30000; // 3 mins
 
 export class Game {
   state: "Waiting" | "Playing" | "Judging";
@@ -26,14 +21,16 @@ export class Game {
   adjective?: Card;
   judge?: Player;
   start: number;
+  io: Server;
 
-  constructor() {
+  constructor(io: Server) {
     this.state = "Waiting";
     this.players = [];
     this.nouns = [];
     this.adjectives = [];
     this.discardedNouns = NOUNS.slice();
     this.start = Date.now();
+    this.io = io;
   }
 
   toJSON(): TGame {
@@ -48,14 +45,12 @@ export class Game {
         winner: this.last.winner.toJSON(),
       },
       cards: this.state === "Judging" ? this.playedCards() : undefined,
-      elapsed: Math.floor((Date.now() - this.start) / 1000),
+      // elapsed: Math.floor((Date.now() - this.start) / 1000),
     };
   }
 
   send() {
-    this.players.forEach((player) => {
-      player.send();
-    });
+    this.io.emit("game", this.toJSON());
   }
 
   nextRound() {
@@ -70,8 +65,6 @@ export class Game {
     }
     this.adjective = this.adjectives.shift()!;
     this.nextJudge();
-
-    this.send();
   }
 
   nextJudge() {
@@ -81,9 +74,6 @@ export class Game {
       if (this.judge != null) {
         i = (findIndex(this.players, "judge") + 1) % this.players.length;
         this.judge.judge = false;
-        if (this.judge.played != null) {
-          --this.judge.score; // penalty for not judging
-        }
       }
 
       this.judge = this.players[i];
@@ -96,9 +86,7 @@ export class Game {
       delete this.judge;
     }
 
-    this.play();
-
-    this.send();
+    this.play(true);
   }
 
   stop() {
@@ -115,7 +103,7 @@ export class Game {
   }
 
   pick(card: Card) {
-    const winner = find(this.players, (p) => p.played?.name === card.name)!;
+    const winner = this.players.find((p) => p.played?.name === card.name)!;
     ++winner.score;
     this.last = {
       judge: this.judge!,
@@ -129,8 +117,6 @@ export class Game {
       }
     });
     this.nextRound();
-
-    this.send();
   }
 
   draw() {
@@ -151,7 +137,7 @@ export class Game {
     return sortBy(cards, "name");
   }
 
-  play() {
+  play(changed = false) {
     const elapsed = Date.now() - this.start;
     if (this.state === "Playing") {
       if (
@@ -162,33 +148,39 @@ export class Game {
         this.state = "Judging";
         this.start = Date.now();
 
-        this.send();
+        changed = true;
       }
+    }
+
+    if (changed) {
+      this.send();
     }
   }
 
   update() {
     const elapsed = Date.now() - this.start;
+    // this.io.emit("elapsed", elapsed);
     switch (this.state) {
       case "Playing":
         this.play();
         break;
       case "Judging":
         if (elapsed > INTERVAL) {
-          this.nextJudge();
           this.state = "Playing";
           this.start = Date.now();
-          this.play();
+          if (this.judge) {
+            --this.judge.score;
+          }
+          this.nextJudge();
         }
         break;
       case "Waiting":
         break;
     }
-    this.send();
   }
 
-  createPlayer(ws: WebSocket) {
-    const player = new Player(this, ws);
+  createPlayer(socket: Socket) {
+    const player = new Player(this, socket);
 
     player.draw(7);
 
@@ -227,7 +219,7 @@ export class Game {
 
 export class Player {
   game: Game;
-  ws: WebSocket;
+  socket: Socket;
   lastMessage: string;
   id: string;
   name: string;
@@ -236,12 +228,12 @@ export class Player {
   judge: boolean;
   played?: Card;
 
-  constructor(game: Game, ws: WebSocket) {
+  constructor(game: Game, socket: Socket) {
     this.name = sample(NOUNS)!.name;
     this.id = uuid();
     this.lastMessage = "";
     this.game = game;
-    this.ws = ws;
+    this.socket = socket;
     this.hand = [];
     this.score = 0;
     this.judge = false;
@@ -257,26 +249,16 @@ export class Player {
     };
   }
 
-  send() {
-    if (this.ws.readyState === WebSocket.OPEN) {
-      const state: GameState = {
-        game: this.game.toJSON(),
-        hand: this.hand,
-        id: this.id,
-      };
-      const message = JSON.stringify(state);
-      if (message !== this.lastMessage) {
-        this.ws.send((this.lastMessage = message));
-      }
-    }
-  }
-
   draw(n = 1) {
+    let changed = false;
     for (let i = 0; i < n; ++i) {
       this.hand.unshift(this.game.draw());
+      changed = true;
     }
 
-    this.game.send();
+    if (changed) {
+      this.socket.emit("hand", this.hand);
+    }
   }
 
   play(card: Card) {
@@ -286,8 +268,8 @@ export class Player {
         findIndex(this.hand, (c) => card.name === c.name),
         1
       );
-      this.game.play();
-      this.game.send();
+      this.socket.emit("hand", this.hand);
+      this.game.play(true);
     }
   }
 
